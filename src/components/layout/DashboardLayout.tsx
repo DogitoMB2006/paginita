@@ -4,11 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { requestNotificationPermission, showBrowserNotification } from '../../lib/notifications'
 import { RightSidebar } from './RightSidebar'
 
-type ProfileNotificationState = {
-  last_seen_todos_at: string | null
-  last_seen_plans_at: string | null
-}
-
 type Toast = {
   id: string
   message: string
@@ -18,7 +13,6 @@ type Toast = {
 export function DashboardLayout() {
   const location = useLocation()
   const [userId, setUserId] = useState<string | null>(null)
-  const [notifState, setNotifState] = useState<ProfileNotificationState | null>(null)
   const [todoBadge, setTodoBadge] = useState(0)
   const [planesBadge, setPlanesBadge] = useState(0)
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -43,14 +37,8 @@ export function DashboardLayout() {
         .eq('id', user.id)
         .single()
 
-      const profileNotif: ProfileNotificationState = {
-        last_seen_todos_at: data?.last_seen_todos_at ?? null,
-        last_seen_plans_at: data?.last_seen_plans_at ?? null,
-      }
-      setNotifState(profileNotif)
-
-      const lastTodos = profileNotif.last_seen_todos_at
-      const lastPlans = profileNotif.last_seen_plans_at
+      const lastTodos = data?.last_seen_todos_at ?? null
+      const lastPlans = data?.last_seen_plans_at ?? null
 
       if (lastTodos) {
         const { count: todosCount } = await supabase
