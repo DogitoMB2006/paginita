@@ -3,14 +3,19 @@ import { Home, ListTodo, Calendar, Heart, User, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const navItems = [
-  { icon: Home, label: 'Inicio', path: '/dashboard' },
-  { icon: ListTodo, label: 'Cosas que hacer', path: '/dashboard/todo' },
-  { icon: Calendar, label: 'Planes', path: '/dashboard/planes' },
-  { icon: Heart, label: 'Cartitas', path: '/dashboard/cartitas' },
-  { icon: User, label: 'Perfil', path: '/dashboard/perfil' },
+  { icon: Home, label: 'Inicio', path: '/dashboard', key: 'home' },
+  { icon: ListTodo, label: 'Cosas que hacer', path: '/dashboard/todo', key: 'todo' },
+  { icon: Calendar, label: 'Planes', path: '/dashboard/planes', key: 'planes' },
+  { icon: Heart, label: 'Cartitas', path: '/dashboard/cartitas', key: 'letters' },
+  { icon: User, label: 'Perfil', path: '/dashboard/perfil', key: 'perfil' },
 ]
 
-export function RightSidebar() {
+type RightSidebarProps = {
+  todoBadge?: number
+  planesBadge?: number
+}
+
+export function RightSidebar({ todoBadge = 0, planesBadge = 0 }: RightSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -23,6 +28,12 @@ export function RightSidebar() {
       <div className="flex w-full justify-around md:flex-col md:gap-6 md:px-4">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path
+          const badge =
+            item.key === 'todo'
+              ? todoBadge
+              : item.key === 'planes'
+              ? planesBadge
+              : 0
           return (
             <Link
               key={item.path}
@@ -36,6 +47,11 @@ export function RightSidebar() {
               <div className="flex items-center justify-center h-6 w-6 shrink-0 transition-transform duration-300 group-hover/link:scale-110">
                 <item.icon className={`h-6 w-6 ${isActive ? 'fill-primary/20' : ''}`} />
               </div>
+              {badge > 0 && (
+                <span className="absolute -top-0.5 right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white shadow-sm md:right-0.5">
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
               
               {/* Desktop Expandable Text */}
               <span className="absolute left-14 ml-2 hidden whitespace-nowrap text-sm font-medium opacity-0 transition-opacity duration-300 group-hover:opacity-100 md:block">

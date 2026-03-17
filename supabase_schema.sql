@@ -6,7 +6,10 @@ create table public.profiles (
   id uuid references auth.users on delete cascade not null primary key,
   display_name text,
   avatar_url text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Notification helpers: when each user last saw sections
+  last_seen_todos_at timestamp with time zone,
+  last_seen_plans_at timestamp with time zone
 );
 
 -- 2. Create Todos table (Cosas que hacer)
