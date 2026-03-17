@@ -22,15 +22,22 @@ let isQuitting = false
 
 app.setAppUserModelId(APP_ID)
 
-const getAppIcon = () => {
-  // Use PNG for runtime window/tray icon (better support in tray),
-  // while electron-builder uses the ICO for the EXE/installer.
-  const iconPath = path.join(__dirname, '..', 'public', 'icono.png')
-  try {
-    const image = nativeImage.createFromPath(iconPath)
-    if (!image.isEmpty()) return image
-  } catch {
-    // ignore, will fall back to default icon
+const getAppIcon = (forTray = false) => {
+  // Try ICO first (included in package); fall back to PNG. For tray, use 16x16 so Windows shows it.
+  const icoPath = path.join(__dirname, '..', 'public', 'icono.ico')
+  const pngPath = path.join(__dirname, '..', 'public', 'icono.png')
+  for (const iconPath of [icoPath, pngPath]) {
+    try {
+      const image = nativeImage.createFromPath(iconPath)
+      if (!image.isEmpty()) {
+        if (forTray && (image.getSize().width > 32 || image.getSize().height > 32)) {
+          return image.resize({ width: 16, height: 16 })
+        }
+        return image
+      }
+    } catch {
+      // try next path
+    }
   }
   return undefined
 }
@@ -88,8 +95,15 @@ const setupUpdater = () => {
     sendUpdaterStatus({
       type: 'update-available',
       version: info.version,
-      message: 'Se ha encontrado nueva actualización',
+      message: 'Se ha recibido una nueva actualización. ¿Quieres descargarla?',
     })
+    // Notify user even when app is in background
+    const notif = new Notification({
+      title: 'Nueva actualización disponible',
+      body: 'Se ha recibido una nueva actualización. Abre la app y elige Sí para descargar.',
+      icon: getAppIcon() ?? undefined,
+    })
+    notif.show()
   })
 
   autoUpdater.on('update-not-available', () => {
@@ -134,7 +148,7 @@ const createMainWindow = async () => {
     height: 800,
     show: false,
     autoHideMenuBar: true,
-    icon: getAppIcon(),
+    icon: getAppIcon(false),
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -192,7 +206,7 @@ if (!singleInstanceLock) {
     setupUpdater()
     mainWindow = await createMainWindow()
 
-    const icon = getAppIcon()
+    const icon = getAppIcon(true)
     tray = new Tray(icon || nativeImage.createEmpty())
     tray.setToolTip('Paginita')
     tray.setContextMenu(
@@ -230,10 +244,10 @@ if (!singleInstanceLock) {
     })
 
     if (!isDev) {
+      // Check for updates as soon as the window is ready
       setTimeout(() => {
         void autoUpdater.checkForUpdates()
-      }, 5000)
-
+      }, 2000)
       setInterval(() => {
         void autoUpdater.checkForUpdates()
       }, 30 * 60 * 1000)
