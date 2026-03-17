@@ -23,3 +23,4 @@ dist-ssr
 *.sln
 *.sw?
 supabase_schema.sql
+supabase_schema.sql

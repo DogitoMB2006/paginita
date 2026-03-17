@@ -13,9 +13,10 @@ const navItems = [
 type RightSidebarProps = {
   todoBadge?: number
   planesBadge?: number
+  lettersBadge?: number
 }
 
-export function RightSidebar({ todoBadge = 0, planesBadge = 0 }: RightSidebarProps) {
+export function RightSidebar({ todoBadge = 0, planesBadge = 0, lettersBadge = 0 }: RightSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -33,6 +34,8 @@ export function RightSidebar({ todoBadge = 0, planesBadge = 0 }: RightSidebarPro
               ? todoBadge
               : item.key === 'planes'
               ? planesBadge
+              : item.key === 'letters'
+              ? lettersBadge
               : 0
           return (
             <Link

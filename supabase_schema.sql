@@ -9,7 +9,8 @@ create table public.profiles (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   -- Notification helpers: when each user last saw sections
   last_seen_todos_at timestamp with time zone,
-  last_seen_plans_at timestamp with time zone
+  last_seen_plans_at timestamp with time zone,
+  last_seen_letters_at timestamp with time zone
 );
 
 -- 2. Create Todos table (Cosas que hacer)
@@ -36,6 +37,10 @@ create table public.letters (
   id uuid default uuid_generate_v4() primary key,
   title text not null,
   content text not null,
+  image_url text,
+  recipient_id uuid references public.profiles(id) on delete cascade not null,
+  is_read boolean default false not null,
+  read_at timestamp with time zone,
   created_by uuid references public.profiles(id) on delete cascade not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -83,17 +88,17 @@ create policy "Authenticated users can delete plans" on public.plans
   for delete using (auth.role() = 'authenticated');
 
 -- Letters Policies
-create policy "Authenticated users can view all letters" on public.letters
-  for select using (auth.role() = 'authenticated');
+create policy "Users can view sent and received letters" on public.letters
+  for select using (created_by = auth.uid() or recipient_id = auth.uid());
   
-create policy "Authenticated users can insert letters" on public.letters
-  for insert with check (auth.role() = 'authenticated');
+create policy "Users can insert their own letters" on public.letters
+  for insert with check (created_by = auth.uid());
   
-create policy "Authenticated users can update letters" on public.letters
-  for update using (auth.role() = 'authenticated');
+create policy "Recipients can mark letters as read" on public.letters
+  for update using (recipient_id = auth.uid());
   
-create policy "Authenticated users can delete letters" on public.letters
-  for delete using (auth.role() = 'authenticated');
+create policy "Users can delete their own sent letters" on public.letters
+  for delete using (created_by = auth.uid());
 
 -- Automatically create a profile when a new user signs up
 create function public.handle_new_user()

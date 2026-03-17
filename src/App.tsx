@@ -8,6 +8,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout'
 import { CosasQueHacer } from './pages/CosasQueHacer'
 import { Perfil } from './pages/Perfil'
 import { Planes } from './pages/Planes'
+import { Cartitas } from './pages/Cartitas'
 
 function App() {
   const [session, setSession] = useState<any>(null)
@@ -51,6 +52,7 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="todo" element={<CosasQueHacer />} />
         <Route path="planes" element={<Planes />} />
+        <Route path="cartitas" element={<Cartitas />} />
         <Route path="perfil" element={<Perfil />} />
         <Route path="*" element={<Dashboard />} />
       </Route>
