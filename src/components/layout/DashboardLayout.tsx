@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { requestNotificationPermission, showBrowserNotification } from '../../lib/notifications'
+import { getElectronAPI, isElectronRuntime, type UpdaterStatusPayload } from '../../lib/runtime'
 import { RightSidebar } from './RightSidebar'
 
 type Toast = {
@@ -16,6 +17,13 @@ type IncomingLetterModal = {
   senderAvatar: string | null
 }
 
+type UpdateModalState = {
+  status: 'available' | 'downloading' | 'downloaded' | 'error'
+  version?: string
+  message?: string
+  percent?: number
+}
+
 export function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -25,6 +33,7 @@ export function DashboardLayout() {
   const [lettersBadge, setLettersBadge] = useState(0)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [incomingLetterModal, setIncomingLetterModal] = useState<IncomingLetterModal | null>(null)
+  const [updateModal, setUpdateModal] = useState<UpdateModalState | null>(null)
   const currentPathRef = useRef(location.pathname)
 
   useEffect(() => {
@@ -286,6 +295,46 @@ export function DashboardLayout() {
     return () => clearTimeout(timer)
   }, [toasts])
 
+  useEffect(() => {
+    if (!isElectronRuntime()) return
+
+    const electronAPI = getElectronAPI()
+    if (!electronAPI) return
+
+    const unsubscribe = electronAPI.onUpdaterStatus((payload: UpdaterStatusPayload) => {
+      if (payload.type === 'update-available') {
+        setUpdateModal({
+          status: 'available',
+          version: payload.version,
+          message: payload.message ?? 'Se ha encontrado nueva actualización',
+        })
+      } else if (payload.type === 'download-progress') {
+        setUpdateModal((current) => ({
+          status: 'downloading',
+          version: current?.version,
+          message: 'Descargando actualización...',
+          percent: payload.percent ?? current?.percent ?? 0,
+        }))
+      } else if (payload.type === 'update-downloaded') {
+        setUpdateModal((current) => ({
+          status: 'downloaded',
+          version: current?.version,
+          message: payload.message ?? 'Se actualizará la app',
+        }))
+      } else if (payload.type === 'error') {
+        setUpdateModal((current) => ({
+          status: 'error',
+          version: current?.version,
+          message: payload.message ?? 'No se pudo completar la actualización',
+        }))
+      }
+    })
+
+    void electronAPI.checkForUpdates()
+
+    return unsubscribe
+  }, [])
+
   return (
     <div className="flex min-h-screen bg-rose-50/30 dark:bg-slate-950">
       {/* Main Content Area */}
@@ -355,6 +404,95 @@ export function DashboardLayout() {
                   >
                     Abrir
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {updateModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-md">
+              <div className="relative z-10 w-full max-w-md rounded-2xl bg-white/95 p-6 text-center shadow-2xl shadow-pink-500/20 ring-1 ring-slate-200/80 dark:bg-slate-900/95 dark:ring-slate-700/80">
+                <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {updateModal.message ?? 'Se ha encontrado nueva actualización'}
+                </p>
+                {updateModal.version && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Versión disponible: {updateModal.version}
+                  </p>
+                )}
+                {updateModal.status === 'downloading' && (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                    Descargando: {updateModal.percent ?? 0}%
+                  </p>
+                )}
+                {updateModal.status === 'downloaded' && (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                    Se actualizará la app al reiniciar.
+                  </p>
+                )}
+                <div className="mt-5 flex justify-center gap-2">
+                  {updateModal.status === 'available' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setUpdateModal(null)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Más tarde
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUpdateModal((current) =>
+                            current
+                              ? { ...current, status: 'downloading', message: 'Descargando actualización...' }
+                              : current,
+                          )
+                          void getElectronAPI()?.downloadUpdate()
+                        }}
+                        className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                      >
+                        Actualizar ahora
+                      </button>
+                    </>
+                  )}
+                  {updateModal.status === 'downloading' && (
+                    <button
+                      type="button"
+                      disabled
+                      className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                    >
+                      Descargando...
+                    </button>
+                  )}
+                  {updateModal.status === 'downloaded' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setUpdateModal(null)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Más tarde
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          getElectronAPI()?.quitAndInstall()
+                        }}
+                        className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                      >
+                        Reiniciar y actualizar
+                      </button>
+                    </>
+                  )}
+                  {updateModal.status === 'error' && (
+                    <button
+                      type="button"
+                      onClick={() => setUpdateModal(null)}
+                      className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                    >
+                      Cerrar
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
