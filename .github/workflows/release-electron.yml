@@ -34,14 +34,30 @@ jobs:
           $v = (Get-Content package.json | ConvertFrom-Json).version
           echo "VERSION=$v" >> $env:GITHUB_OUTPUT
 
-      - name: Create Release and upload installer
+      - name: List build output
+        run: Get-ChildItem -Path release -Recurse -File | Select-Object FullName
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Paginita ${{ github.ref_name }}
           draft: false
-          files: |
-            release/*.exe
-            release/*.exe.blockmap
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows installer to Release
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $exe = "release\Paginita Setup $version.exe"
+          $blockmap = "release\Paginita Setup $version.exe.blockmap"
+          if (Test-Path $exe) {
+            gh release upload ${{ github.ref_name }} $exe $blockmap --clobber
+          } else {
+            Write-Error "Installer not found: $exe"
+            Get-ChildItem release
+            exit 1
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
