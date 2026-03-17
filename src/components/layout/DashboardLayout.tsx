@@ -84,19 +84,60 @@ export function DashboardLayout() {
         if (isMounted) setPlanesBadge(plansCount ?? 0)
       }
 
+      let unreadLettersCount = 0
+
       if (lastLetters) {
         const { count: lettersCount } = await supabase
           .from('letters')
           .select('id', { count: 'exact', head: true })
           .eq('recipient_id', currentUserId)
           .gt('created_at', lastLetters)
-        if (isMounted) setLettersBadge(lettersCount ?? 0)
+        unreadLettersCount = lettersCount ?? 0
+        if (isMounted) setLettersBadge(unreadLettersCount)
       } else {
         const { count: lettersCount } = await supabase
           .from('letters')
           .select('id', { count: 'exact', head: true })
           .eq('recipient_id', currentUserId)
-        if (isMounted) setLettersBadge(lettersCount ?? 0)
+        unreadLettersCount = lettersCount ?? 0
+        if (isMounted) setLettersBadge(unreadLettersCount)
+      }
+
+      // If there are unread letters and user is entering the app (and not on cartitas),
+      // show the incoming letter modal for the most recent unread letter.
+      if (
+        unreadLettersCount > 0 &&
+        isMounted &&
+        !currentPathRef.current.startsWith('/dashboard/cartitas')
+      ) {
+        const { data: latestLetter } = await supabase
+          .from('letters')
+          .select(
+            `
+            id,
+            created_by,
+            sender:created_by (
+              display_name,
+              avatar_url
+            )
+          `,
+          )
+          .eq('recipient_id', currentUserId)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (latestLetter) {
+          const sender = (latestLetter as any).sender?.[0] ?? (latestLetter as any).sender ?? null
+          const senderName = sender?.display_name || 'Tu amorcito'
+          const senderAvatar = sender?.avatar_url ?? null
+          setIncomingLetterModal({
+            letterId: (latestLetter as any).id,
+            senderName,
+            senderAvatar,
+          })
+        }
       }
 
       requestNotificationPermission()
