@@ -84,6 +84,28 @@ export function Dashboard() {
 
     fetchTodosPreview()
     fetchNextPlan()
+
+    const channel = supabase
+      .channel('realtime-dashboard')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'todos' },
+        () => {
+          void fetchTodosPreview()
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'plans' },
+        () => {
+          void fetchNextPlan()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const formattedNextPlanDate = useMemo(() => {

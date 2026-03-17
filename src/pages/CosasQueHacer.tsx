@@ -39,7 +39,7 @@ export function CosasQueHacer() {
             display_name,
             avatar_url
           )
-        `
+        `,
         )
         .order('created_at', { ascending: false })
 
@@ -52,6 +52,59 @@ export function CosasQueHacer() {
     }
 
     fetchTodos()
+
+    const channel = supabase
+      .channel('realtime-todos-page')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'todos' },
+        async (payload) => {
+          const newRow = payload.new as { id: string }
+          const { data } = await supabase
+            .from('todos')
+            .select(
+              `
+              id,
+              title,
+              is_completed,
+              created_at,
+              profiles:created_by (
+                display_name,
+                avatar_url
+              )
+            `,
+            )
+            .eq('id', newRow.id)
+            .single()
+          if (data) {
+            setTodos((prev) => {
+              if (prev.find((t) => t.id === data.id)) return prev
+              return [data as Todo, ...prev]
+            })
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'todos' },
+        (payload) => {
+          const updated = payload.new as Todo
+          setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'todos' },
+        (payload) => {
+          const removed = payload.old as { id: string }
+          setTodos((prev) => prev.filter((t) => t.id !== removed.id))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const handleAddTodo = async () => {

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { requestNotificationPermission, showBrowserNotification } from '../../lib/notifications'
 import { RightSidebar } from './RightSidebar'
 
 type ProfileNotificationState = {
@@ -21,6 +22,11 @@ export function DashboardLayout() {
   const [todoBadge, setTodoBadge] = useState(0)
   const [planesBadge, setPlanesBadge] = useState(0)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const currentPathRef = useRef(location.pathname)
+
+  useEffect(() => {
+    currentPathRef.current = location.pathname
+  }, [location.pathname])
 
   useEffect(() => {
     const init = async () => {
@@ -28,7 +34,8 @@ export function DashboardLayout() {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) return
-      setUserId(user.id)
+      const currentUserId = user.id
+      setUserId(currentUserId)
 
       const { data } = await supabase
         .from('profiles')
@@ -50,7 +57,13 @@ export function DashboardLayout() {
           .from('todos')
           .select('id', { count: 'exact', head: true })
           .gt('created_at', lastTodos)
-          .neq('created_by', user.id)
+          .neq('created_by', currentUserId)
+        setTodoBadge(todosCount ?? 0)
+      } else {
+        const { count: todosCount } = await supabase
+          .from('todos')
+          .select('id', { count: 'exact', head: true })
+          .neq('created_by', currentUserId)
         setTodoBadge(todosCount ?? 0)
       }
 
@@ -59,9 +72,17 @@ export function DashboardLayout() {
           .from('plans')
           .select('id', { count: 'exact', head: true })
           .gt('created_at', lastPlans)
-          .neq('created_by', user.id)
+          .neq('created_by', currentUserId)
+        setPlanesBadge(plansCount ?? 0)
+      } else {
+        const { count: plansCount } = await supabase
+          .from('plans')
+          .select('id', { count: 'exact', head: true })
+          .neq('created_by', currentUserId)
         setPlanesBadge(plansCount ?? 0)
       }
+
+      requestNotificationPermission()
 
       const channel = supabase
         .channel('realtime-notifications')
@@ -69,9 +90,7 @@ export function DashboardLayout() {
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'todos' },
           async (payload: any) => {
-            if (!userId) return
             const newRow = payload.new
-            if (newRow.created_by === user.id) return
 
             const { data: profile } = await supabase
               .from('profiles')
@@ -80,24 +99,28 @@ export function DashboardLayout() {
               .single()
 
             const displayName = profile?.display_name || 'Tu amorcito'
-            setToasts((prev) => [
-              ...prev,
-              {
-                id: `todo-${newRow.id}`,
-                message: `${displayName} ha creado una nueva cosa para hacer`,
-                avatar_url: profile?.avatar_url ?? null,
-              },
-            ])
-            setTodoBadge((prev) => prev + 1)
+            if (!currentPathRef.current.startsWith('/dashboard/todo')) {
+              showBrowserNotification(
+                `${displayName} ha creado una nueva cosa para hacer`,
+                profile?.avatar_url ?? null,
+              )
+              setToasts((prev) => [
+                ...prev,
+                {
+                  id: `todo-${newRow.id}`,
+                  message: `${displayName} ha creado una nueva cosa para hacer`,
+                  avatar_url: profile?.avatar_url ?? null,
+                },
+              ])
+              setTodoBadge((prev) => prev + 1)
+            }
           },
         )
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'plans' },
           async (payload: any) => {
-            if (!userId) return
             const newRow = payload.new
-            if (newRow.created_by === user.id) return
 
             const { data: profile } = await supabase
               .from('profiles')
@@ -106,15 +129,21 @@ export function DashboardLayout() {
               .single()
 
             const displayName = profile?.display_name || 'Tu amorcito'
-            setToasts((prev) => [
-              ...prev,
-              {
-                id: `plan-${newRow.id}`,
-                message: `${displayName} ha creado un nuevo plan`,
-                avatar_url: profile?.avatar_url ?? null,
-              },
-            ])
-            setPlanesBadge((prev) => prev + 1)
+            if (!currentPathRef.current.startsWith('/dashboard/planes')) {
+              showBrowserNotification(
+                `${displayName} ha creado un nuevo plan`,
+                profile?.avatar_url ?? null,
+              )
+              setToasts((prev) => [
+                ...prev,
+                {
+                  id: `plan-${newRow.id}`,
+                  message: `${displayName} ha creado un nuevo plan`,
+                  avatar_url: profile?.avatar_url ?? null,
+                },
+              ])
+              setPlanesBadge((prev) => prev + 1)
+            }
           },
         )
         .subscribe()
@@ -128,18 +157,16 @@ export function DashboardLayout() {
   }, [])
 
   useEffect(() => {
-    if (!userId || !notifState) return
+    if (!userId) return
 
     const markTodosSeen = async () => {
       const now = new Date().toISOString()
-      setNotifState((prev) => (prev ? { ...prev, last_seen_todos_at: now } : prev))
       setTodoBadge(0)
       await supabase.from('profiles').update({ last_seen_todos_at: now }).eq('id', userId)
     }
 
     const markPlansSeen = async () => {
       const now = new Date().toISOString()
-      setNotifState((prev) => (prev ? { ...prev, last_seen_plans_at: now } : prev))
       setPlanesBadge(0)
       await supabase.from('profiles').update({ last_seen_plans_at: now }).eq('id', userId)
     }
@@ -149,7 +176,7 @@ export function DashboardLayout() {
     } else if (location.pathname.startsWith('/dashboard/planes')) {
       void markPlansSeen()
     }
-  }, [location.pathname, notifState, userId])
+  }, [location.pathname, userId])
 
   useEffect(() => {
     if (toasts.length === 0) return

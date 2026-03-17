@@ -70,6 +70,48 @@ export function Planes() {
     }
 
     fetchPlans()
+
+    const channel = supabase
+      .channel('realtime-plans-page')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'plans' },
+        (payload) => {
+          const newPlan = payload.new as Plan
+          setPlans((prev) =>
+            [...prev, newPlan].sort(
+              (a, b) => new Date(a.plan_date).getTime() - new Date(b.plan_date).getTime(),
+            ),
+          )
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plans' },
+        (payload) => {
+          const updated = payload.new as Plan
+          setPlans((prev) =>
+            prev
+              .map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+              .sort(
+                (a, b) => new Date(a.plan_date).getTime() - new Date(b.plan_date).getTime(),
+              ),
+          )
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'plans' },
+        (payload) => {
+          const removed = payload.old as { id: string }
+          setPlans((prev) => prev.filter((p) => p.id !== removed.id))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const upcomingPlans = useMemo(() => {
