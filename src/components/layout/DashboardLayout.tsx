@@ -26,6 +26,30 @@ type UpdateModalState = {
   latestVersion?: string
 }
 
+const normalizeVersion = (version?: string) => String(version ?? '').replace(/^v/i, '')
+
+const isNewerVersion = (latestVersion?: string, currentVersion?: string) => {
+  if (!latestVersion || !currentVersion) return false
+
+  const latestParts = normalizeVersion(latestVersion)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const currentParts = normalizeVersion(currentVersion)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const length = Math.max(latestParts.length, currentParts.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const latestValue = latestParts[index] ?? 0
+    const currentValue = currentParts[index] ?? 0
+
+    if (latestValue > currentValue) return true
+    if (latestValue < currentValue) return false
+  }
+
+  return false
+}
+
 export function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -500,7 +524,7 @@ export function DashboardLayout() {
               {updateModal.currentVersion && (
                 <p>Versión actual instalada: {updateModal.currentVersion}</p>
               )}
-              {updateModal.latestVersion && updateModal.latestVersion !== updateModal.currentVersion && (
+              {isNewerVersion(updateModal.latestVersion, updateModal.currentVersion) && (
                 <p>Versión disponible en GitHub: {updateModal.latestVersion}</p>
               )}
             </div>

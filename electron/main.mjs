@@ -19,6 +19,7 @@ const iconCache = new Map()
 let mainWindow = null
 let tray = null
 let isQuitting = false
+let lastUpdateCheckAt = 0
 
 app.setAppUserModelId(APP_ID)
 
@@ -83,12 +84,34 @@ const showNativeNotification = async (message, avatarUrl) => {
   notification.show()
 }
 
+const normalizeVersion = (version) => String(version ?? '').replace(/^v/i, '')
+
+const compareVersions = (left, right) => {
+  const leftParts = normalizeVersion(left)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const rightParts = normalizeVersion(right)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const length = Math.max(leftParts.length, rightParts.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = leftParts[index] ?? 0
+    const rightValue = rightParts[index] ?? 0
+
+    if (leftValue > rightValue) return 1
+    if (leftValue < rightValue) return -1
+  }
+
+  return 0
+}
+
 const getVersionPayload = (latestVersion) => {
   const currentVersion = app.getVersion()
   const payload = {
     currentVersion,
   }
-  if (latestVersion) {
+  if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
     payload.latestVersion = latestVersion
   }
   return payload
@@ -115,6 +138,9 @@ const getUpdaterErrorMessage = (error) => {
 const setupUpdater = () => {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('before-quit-for-update', () => {
+    isQuitting = true
+  })
 
   autoUpdater.on('checking-for-update', () => {
     sendUpdaterStatus({
@@ -171,6 +197,26 @@ const setupUpdater = () => {
   })
 }
 
+const checkForUpdates = async ({ force = false } = {}) => {
+  if (isDev) return { ok: false, reason: 'dev-mode' }
+
+  const now = Date.now()
+  if (!force && now - lastUpdateCheckAt < 5 * 60 * 1000) {
+    return { ok: true, skipped: true }
+  }
+
+  lastUpdateCheckAt = now
+
+  try {
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
+  } catch (error) {
+    const message = getUpdaterErrorMessage(error)
+    console.error('[updater] checkForUpdates() error:', message)
+    return { ok: false, reason: message }
+  }
+}
+
 const createMainWindow = async () => {
   const preloadPath = path.join(__dirname, 'preload.cjs')
   const winOpts = {
@@ -209,17 +255,12 @@ ipcMain.handle('notifications:show', async (_event, payload) => {
 })
 
 ipcMain.handle('updater:check', async () => {
-  if (isDev) return { ok: false, reason: 'dev-mode' }
   console.log('[updater] IPC updater:check invoked')
-  try {
-    await autoUpdater.checkForUpdates()
+  const result = await checkForUpdates({ force: true })
+  if (result.ok) {
     console.log('[updater] checkForUpdates() resolved')
-    return { ok: true }
-  } catch (err) {
-    const message = getUpdaterErrorMessage(err)
-    console.error('[updater] checkForUpdates() error:', message)
-    return { ok: false, reason: message }
   }
+  return result
 })
 
 ipcMain.handle('updater:download', async () => {
@@ -230,6 +271,7 @@ ipcMain.handle('updater:download', async () => {
 
 ipcMain.on('updater:quit-and-install', () => {
   if (!isDev) {
+    isQuitting = true
     autoUpdater.quitAndInstall()
   }
 })
@@ -259,6 +301,10 @@ const singleInstanceLock = app.requestSingleInstanceLock()
 if (!singleInstanceLock) {
   app.quit()
 } else {
+  app.on('before-quit', () => {
+    isQuitting = true
+  })
+
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -307,13 +353,19 @@ if (!singleInstanceLock) {
       mainWindow.focus()
     })
 
+    mainWindow.on('focus', () => {
+      if (!isDev) {
+        void checkForUpdates()
+      }
+    })
+
     if (!isDev) {
       // Check for updates as soon as the window is ready
       setTimeout(() => {
-        void autoUpdater.checkForUpdates()
+        void checkForUpdates({ force: true })
       }, 2000)
       setInterval(() => {
-        void autoUpdater.checkForUpdates()
+        void checkForUpdates()
       }, 30 * 60 * 1000)
     }
 
