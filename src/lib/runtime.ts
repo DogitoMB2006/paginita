@@ -9,6 +9,8 @@ export type UpdaterStatusPayload = {
   version?: string
   message?: string
   percent?: number
+  currentVersion?: string
+  latestVersion?: string
 }
 
 export type ElectronAPI = {

@@ -18,10 +18,12 @@ type IncomingLetterModal = {
 }
 
 type UpdateModalState = {
-  status: 'available' | 'downloading' | 'downloaded' | 'error'
+  status: 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
   version?: string
   message?: string
   percent?: number
+  currentVersion?: string
+  latestVersion?: string
 }
 
 export function DashboardLayout() {
@@ -358,29 +360,53 @@ export function DashboardLayout() {
     if (!electronAPI) return
 
     const unsubscribe = electronAPI.onUpdaterStatus((payload: UpdaterStatusPayload) => {
-      if (payload.type === 'update-available') {
+      if (payload.type === 'checking-for-update') {
+        setUpdateModal({
+          status: 'checking',
+          version: payload.latestVersion ?? payload.currentVersion ?? payload.version,
+          currentVersion: payload.currentVersion,
+          latestVersion: payload.latestVersion ?? payload.currentVersion,
+          message: 'Buscando actualizaciones...',
+        })
+      } else if (payload.type === 'update-available') {
         setUpdateModal({
           status: 'available',
           version: payload.version,
+          currentVersion: payload.currentVersion,
+          latestVersion: payload.latestVersion ?? payload.version,
           message: payload.message ?? 'Se ha recibido una nueva actualización. ¿Quieres descargarla?',
+        })
+      } else if (payload.type === 'update-not-available') {
+        setUpdateModal({
+          status: 'up-to-date',
+          version: payload.currentVersion ?? payload.version,
+          currentVersion: payload.currentVersion,
+          latestVersion: payload.latestVersion ?? payload.currentVersion ?? payload.version,
+          message: 'Ya estás en la última versión disponible.',
         })
       } else if (payload.type === 'download-progress') {
         setUpdateModal((current) => ({
           status: 'downloading',
-          version: current?.version,
+          version: current?.version ?? payload.latestVersion ?? payload.currentVersion,
+          currentVersion: payload.currentVersion ?? current?.currentVersion,
+          latestVersion: payload.latestVersion ?? current?.latestVersion,
           message: 'Descargando actualización...',
           percent: payload.percent ?? current?.percent ?? 0,
         }))
       } else if (payload.type === 'update-downloaded') {
         setUpdateModal((current) => ({
           status: 'downloaded',
-          version: current?.version,
+          version: current?.version ?? payload.latestVersion ?? payload.currentVersion,
+          currentVersion: payload.currentVersion ?? current?.currentVersion,
+          latestVersion: payload.latestVersion ?? current?.latestVersion,
           message: payload.message ?? 'Se actualizará la app',
         }))
       } else if (payload.type === 'error') {
         setUpdateModal((current) => ({
           status: 'error',
-          version: current?.version,
+          version: current?.version ?? payload.latestVersion ?? payload.currentVersion,
+          currentVersion: payload.currentVersion ?? current?.currentVersion,
+          latestVersion: payload.latestVersion ?? current?.latestVersion,
           message: payload.message ?? 'No se pudo completar la actualización',
         }))
       }
@@ -470,11 +496,14 @@ export function DashboardLayout() {
                 <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                   {updateModal.message ?? 'Se ha recibido una nueva actualización. ¿Quieres descargarla?'}
                 </p>
-                {updateModal.version && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Versión disponible: {updateModal.version}
-                  </p>
-                )}
+            <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+              {updateModal.currentVersion && (
+                <p>Versión actual instalada: {updateModal.currentVersion}</p>
+              )}
+              {updateModal.latestVersion && updateModal.latestVersion !== updateModal.currentVersion && (
+                <p>Versión disponible en GitHub: {updateModal.latestVersion}</p>
+              )}
+            </div>
                 {updateModal.status === 'downloading' && (
                   <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
                     Descargando: {updateModal.percent ?? 0}%
@@ -486,7 +515,16 @@ export function DashboardLayout() {
                   </p>
                 )}
                 <div className="mt-5 flex justify-center gap-2">
-                  {updateModal.status === 'available' && (
+              {updateModal.status === 'checking' && (
+                <button
+                  type="button"
+                  disabled
+                  className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                >
+                  Buscando actualizaciones…
+                </button>
+              )}
+              {updateModal.status === 'available' && (
                     <>
                       <button
                         type="button"
@@ -520,7 +558,7 @@ export function DashboardLayout() {
                       Descargando...
                     </button>
                   )}
-                  {updateModal.status === 'downloaded' && (
+              {updateModal.status === 'downloaded' && (
                     <>
                       <button
                         type="button"
@@ -540,7 +578,16 @@ export function DashboardLayout() {
                       </button>
                     </>
                   )}
-                  {updateModal.status === 'error' && (
+              {updateModal.status === 'up-to-date' && (
+                <button
+                  type="button"
+                  onClick={() => setUpdateModal(null)}
+                  className="rounded-lg bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                >
+                  Cerrar
+                </button>
+              )}
+              {updateModal.status === 'error' && (
                     <button
                       type="button"
                       onClick={() => setUpdateModal(null)}

@@ -84,11 +84,22 @@ const showNativeNotification = async (message, avatarUrl) => {
 }
 
 const setupUpdater = () => {
+  const getVersionPayload = (latestVersion) => {
+    const currentVersion = app.getVersion()
+    return {
+      currentVersion,
+      latestVersion: latestVersion || currentVersion,
+    }
+  }
+
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('checking-for-update', () => {
-    sendUpdaterStatus({ type: 'checking-for-update' })
+    sendUpdaterStatus({
+      type: 'checking-for-update',
+      ...getVersionPayload(),
+    })
   })
 
   autoUpdater.on('update-available', (info) => {
@@ -96,6 +107,7 @@ const setupUpdater = () => {
       type: 'update-available',
       version: info.version,
       message: 'Se ha recibido una nueva actualización. ¿Quieres descargarla?',
+      ...getVersionPayload(info.version),
     })
     // Notify user even when app is in background
     const notif = new Notification({
@@ -106,8 +118,12 @@ const setupUpdater = () => {
     notif.show()
   })
 
-  autoUpdater.on('update-not-available', () => {
-    sendUpdaterStatus({ type: 'update-not-available' })
+  autoUpdater.on('update-not-available', (info) => {
+    sendUpdaterStatus({
+      type: 'update-not-available',
+      version: info?.version,
+      ...getVersionPayload(info?.version),
+    })
   })
 
   autoUpdater.on('download-progress', (progress) => {
@@ -121,6 +137,7 @@ const setupUpdater = () => {
     sendUpdaterStatus({
       type: 'update-downloaded',
       message: 'Se actualizará la app',
+      ...getVersionPayload(),
     })
   })
 
@@ -130,13 +147,17 @@ const setupUpdater = () => {
     // If there are no GitHub releases yet or GitHub returns 404,
     // treat it as "no updates" instead of surfacing a loud error.
     if (message.includes('404') || message.includes('releases.atom')) {
-      sendUpdaterStatus({ type: 'update-not-available' })
+      sendUpdaterStatus({
+        type: 'update-not-available',
+        ...getVersionPayload(),
+      })
       return
     }
 
     sendUpdaterStatus({
       type: 'error',
       message: message || 'No se pudo completar la actualización',
+      ...getVersionPayload(),
     })
   })
 }
