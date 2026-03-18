@@ -482,15 +482,17 @@ export function ParaVer() {
                   key={item.id}
                   className="group animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-md shadow-pink-500/5 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-pink-500/15 dark:border-slate-700 dark:bg-slate-900/80"
                 >
-                  <div className="relative h-40 overflow-hidden bg-gradient-to-br from-pink-200 via-rose-200 to-orange-100 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800">
+                  <div className="relative overflow-hidden bg-gradient-to-br from-pink-200 via-rose-200 to-orange-100 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800">
                     {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.title}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
+                      <div className="flex max-h-56 w-full items-center justify-center overflow-hidden bg-black/5">
+                        <img
+                          src={item.image_url}
+                          alt={item.title}
+                          className="max-h-56 w-auto max-w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                        />
+                      </div>
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl font-semibold tracking-widest text-white/85">
+                      <div className="flex h-40 w-full items-center justify-center text-3xl font-semibold tracking-widest text-white/85">
                         {getCardFallback(item.title)}
                       </div>
                     )}
@@ -671,8 +673,12 @@ export function ParaVer() {
               </div>
 
               {form.imagePreview && (
-                <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                  <img src={form.imagePreview} alt="Vista previa" className="h-36 w-full object-cover" />
+                <div className="flex max-h-56 w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-black/5 dark:border-slate-700">
+                  <img
+                    src={form.imagePreview}
+                    alt="Vista previa"
+                    className="max-h-56 w-auto max-w-full object-contain"
+                  />
                 </div>
               )}
 
