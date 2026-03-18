@@ -13,8 +13,17 @@ export function ElectronTitleBar() {
   if (!api) return null
 
   const handleCheck = () => {
+    console.log('[paginita] Comprobar actualizaciones clicado')
     setChecking(true)
-    api.checkForUpdates().finally(() => setChecking(false))
+    api
+      .checkForUpdates()
+      .then((result) => {
+        console.log('[paginita] checkForUpdates result:', result)
+      })
+      .catch((error) => {
+        console.error('[paginita] checkForUpdates error:', error)
+      })
+      .finally(() => setChecking(false))
   }
 
   return (

@@ -180,13 +180,17 @@ ipcMain.handle('notifications:show', async (_event, payload) => {
 
 ipcMain.handle('updater:check', async () => {
   if (isDev) return { ok: false, reason: 'dev-mode' }
+  console.log('[updater] IPC updater:check invoked')
   try {
     await autoUpdater.checkForUpdates()
+    console.log('[updater] checkForUpdates() resolved')
     return { ok: true }
   } catch (err) {
     const message = String(err?.message ?? err ?? '')
+    console.error('[updater] checkForUpdates() error:', message)
     // Private repo or no releases: GitHub returns 404 for releases.atom. Treat as "no update" so the UI doesn't show an error.
     if (message.includes('404') || message.includes('releases.atom')) {
+      console.warn('[updater] 404 / releases.atom – treating as no update')
       sendUpdaterStatus({ type: 'update-not-available' })
       return { ok: true }
     }
