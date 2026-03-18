@@ -301,16 +301,17 @@ export function DashboardLayout() {
               .single()
 
             const displayName = profile?.display_name || 'Tu amorcito'
+            showBrowserNotification(`${displayName} te ha enviado una carta`, profile?.avatar_url ?? null)
+            setToasts((prev) => [
+              ...prev,
+              {
+                id: `letter-${newRow.id}`,
+                message: `${displayName} te ha enviado una carta`,
+                avatar_url: profile?.avatar_url ?? null,
+              },
+            ])
+
             if (!currentPathRef.current.startsWith('/dashboard/cartitas')) {
-              showBrowserNotification(`${displayName} te mandó una carta`, profile?.avatar_url ?? null)
-              setToasts((prev) => [
-                ...prev,
-                {
-                  id: `letter-${newRow.id}`,
-                  message: `${displayName} te mandó una cartita`,
-                  avatar_url: profile?.avatar_url ?? null,
-                },
-              ])
               setLettersBadge((prev) => prev + 1)
               setIncomingLetterModal({
                 letterId: newRow.id,
