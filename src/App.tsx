@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import { isElectronRuntime } from './lib/runtime'
+import { ElectronTitleBar } from './components/ElectronTitleBar'
 
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
@@ -11,8 +13,10 @@ import { Planes } from './pages/Planes'
 import { Cartitas } from './pages/Cartitas'
 
 function App() {
+  const location = useLocation()
   const [session, setSession] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const showTitleBar = isElectronRuntime() && location.pathname !== '/login'
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,28 +42,33 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={session ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
-      
-      {/* Protected Routes inside Layout */}
-      <Route
-        path="/dashboard"
-        element={session ? <DashboardLayout /> : <Navigate to="/login" replace />}
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="todo" element={<CosasQueHacer />} />
-        <Route path="planes" element={<Planes />} />
-        <Route path="cartitas" element={<Cartitas />} />
-        <Route path="perfil" element={<Perfil />} />
-        <Route path="*" element={<Dashboard />} />
-      </Route>
+    <>
+      {showTitleBar && <ElectronTitleBar />}
+      <div className={showTitleBar ? 'pt-10' : ''}>
+        <Routes>
+          <Route
+            path="/login"
+            element={session ? <Navigate to="/dashboard" replace /> : <Login />}
+          />
 
-      {/* Redirect root to dashboard -> logic will push unauth to login */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+          {/* Protected Routes inside Layout */}
+          <Route
+            path="/dashboard"
+            element={session ? <DashboardLayout /> : <Navigate to="/login" replace />}
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="todo" element={<CosasQueHacer />} />
+            <Route path="planes" element={<Planes />} />
+            <Route path="cartitas" element={<Cartitas />} />
+            <Route path="perfil" element={<Perfil />} />
+            <Route path="*" element={<Dashboard />} />
+          </Route>
+
+          {/* Redirect root to dashboard -> logic will push unauth to login */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </div>
+    </>
   )
 }
 

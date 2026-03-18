@@ -28,3 +28,4 @@ release
 *.sw?
 supabase_schema.sql
 supabase_schema.sql
+docs/ELECTRON-RELEASES.md

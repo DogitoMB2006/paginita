@@ -19,6 +19,9 @@ export type ElectronAPI = {
   downloadUpdate: () => Promise<{ ok: boolean; reason?: string }>
   quitAndInstall: () => void
   onUpdaterStatus: (callback: (payload: UpdaterStatusPayload) => void) => () => void
+  minimizeWindow: () => void
+  toggleMaximizeWindow: () => void
+  closeWindow: () => void
 }
 
 declare global {

@@ -143,20 +143,25 @@ const setupUpdater = () => {
 
 const createMainWindow = async () => {
   const preloadPath = path.join(__dirname, 'preload.cjs')
-  const window = new BrowserWindow({
+  const winOpts = {
     width: 1280,
     height: 800,
     show: false,
     autoHideMenuBar: true,
+    frame: false,
     icon: getAppIcon(false),
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
     },
-  })
+  }
+  // We use a completely custom title bar, so always hide the native frame.
+  const window = new BrowserWindow(winOpts)
 
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => {
+    window.show()
+  })
 
   if (isDev) {
     await window.loadURL(DEV_URL)
@@ -189,6 +194,27 @@ ipcMain.on('updater:quit-and-install', () => {
   if (!isDev) {
     autoUpdater.quitAndInstall()
   }
+})
+
+ipcMain.on('window:minimize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize()
+  }
+})
+
+ipcMain.on('window:toggle-maximize', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow.maximize()
+  }
+})
+
+ipcMain.on('window:close', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  // Respect existing close behavior (hide to tray instead of quitting).
+  mainWindow.close()
 })
 
 const singleInstanceLock = app.requestSingleInstanceLock()
