@@ -84,13 +84,21 @@ jobs:
           }
 
           $blockmap = $assets | Where-Object { $_.Name -like "*.exe.blockmap" } | Select-Object -First 1
+          $uploadDir = Join-Path $env:RUNNER_TEMP "release-upload"
+          New-Item -ItemType Directory -Force -Path $uploadDir | Out-Null
+
+          $publishedInstallerPath = Join-Path $uploadDir $publishedInstallerName
+          Copy-Item $installer.FullName $publishedInstallerPath -Force
+
           $uploadArgs = @(
-            "$metadataPath#latest.yml",
-            "$($installer.FullName)#$publishedInstallerName"
+            $metadataPath,
+            $publishedInstallerPath
           )
 
           if ($blockmap) {
-            $uploadArgs += "$($blockmap.FullName)#$publishedInstallerName.blockmap"
+            $publishedBlockmapPath = Join-Path $uploadDir "$publishedInstallerName.blockmap"
+            Copy-Item $blockmap.FullName $publishedBlockmapPath -Force
+            $uploadArgs += $publishedBlockmapPath
           }
 
           gh release upload ${{ github.ref_name }} $uploadArgs --clobber

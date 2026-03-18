@@ -101,6 +101,10 @@ const getUpdaterErrorMessage = (error) => {
     return 'No se pudo comprobar actualizaciones. Falta latest.yml en la release de GitHub.'
   }
 
+  if (message.includes('.exe') && message.includes('404')) {
+    return 'No se pudo descargar la actualizacion. El instalador publicado en GitHub no coincide con latest.yml.'
+  }
+
   if (message.includes('404') || message.includes('releases.atom')) {
     return 'No se pudo comprobar actualizaciones en GitHub.'
   }
