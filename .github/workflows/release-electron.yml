@@ -1,0 +1,63 @@
+name: Release Electron Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        run: npm run electron:build
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: List build output
+        run: Get-ChildItem -Path release -Recurse -File | Select-Object FullName
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Paginita ${{ github.ref_name }}
+          draft: false
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows installer to Release
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $exe = "release\Paginita Setup $version.exe"
+          $blockmap = "release\Paginita Setup $version.exe.blockmap"
+          if (Test-Path $exe) {
+            gh release upload ${{ github.ref_name }} $exe $blockmap --clobber
+          } else {
+            Write-Error "Installer not found: $exe"
+            Get-ChildItem release
+            exit 1
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

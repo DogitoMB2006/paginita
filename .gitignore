@@ -10,7 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+release
 *.local
+
+# Cursor / plans
+.cursor
 
 # Editor directories and files
 .vscode/*
@@ -24,3 +28,4 @@ dist-ssr
 *.sw?
 supabase_schema.sql
 supabase_schema.sql
+docs/ELECTRON-RELEASES.md

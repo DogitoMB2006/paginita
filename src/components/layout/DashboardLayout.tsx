@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { requestNotificationPermission, showBrowserNotification } from '../../lib/notifications'
+import { getElectronAPI, isElectronRuntime, type UpdaterStatusPayload } from '../../lib/runtime'
 import { RightSidebar } from './RightSidebar'
 
 type Toast = {
@@ -16,15 +17,24 @@ type IncomingLetterModal = {
   senderAvatar: string | null
 }
 
+type UpdateModalState = {
+  status: 'available' | 'downloading' | 'downloaded' | 'error'
+  version?: string
+  message?: string
+  percent?: number
+}
+
 export function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [userId, setUserId] = useState<string | null>(null)
   const [todoBadge, setTodoBadge] = useState(0)
   const [planesBadge, setPlanesBadge] = useState(0)
+  const [paraVerBadge, setParaVerBadge] = useState(0)
   const [lettersBadge, setLettersBadge] = useState(0)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [incomingLetterModal, setIncomingLetterModal] = useState<IncomingLetterModal | null>(null)
+  const [updateModal, setUpdateModal] = useState<UpdateModalState | null>(null)
   const currentPathRef = useRef(location.pathname)
 
   useEffect(() => {
@@ -46,12 +56,13 @@ export function DashboardLayout() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('last_seen_todos_at, last_seen_plans_at, last_seen_letters_at')
+        .select('last_seen_todos_at, last_seen_plans_at, last_seen_para_ver_at, last_seen_letters_at')
         .eq('id', user.id)
         .single()
 
       const lastTodos = data?.last_seen_todos_at ?? null
       const lastPlans = data?.last_seen_plans_at ?? null
+      const lastParaVer = data?.last_seen_para_ver_at ?? null
       const lastLetters = data?.last_seen_letters_at ?? null
 
       if (lastTodos) {
@@ -82,6 +93,21 @@ export function DashboardLayout() {
           .select('id', { count: 'exact', head: true })
           .neq('created_by', currentUserId)
         if (isMounted) setPlanesBadge(plansCount ?? 0)
+      }
+
+      if (lastParaVer) {
+        const { count: paraVerCount } = await supabase
+          .from('para_ver_items')
+          .select('id', { count: 'exact', head: true })
+          .gt('created_at', lastParaVer)
+          .neq('created_by', currentUserId)
+        if (isMounted) setParaVerBadge(paraVerCount ?? 0)
+      } else {
+        const { count: paraVerCount } = await supabase
+          .from('para_ver_items')
+          .select('id', { count: 'exact', head: true })
+          .neq('created_by', currentUserId)
+        if (isMounted) setParaVerBadge(paraVerCount ?? 0)
       }
 
       let unreadLettersCount = 0
@@ -206,6 +232,37 @@ export function DashboardLayout() {
         )
         .on(
           'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'para_ver_items' },
+          async (payload: any) => {
+            const newRow = payload.new as { id: string; title: string; created_by: string | null }
+            if (!newRow.created_by || newRow.created_by === currentUserId) return
+
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('display_name, avatar_url')
+              .eq('id', newRow.created_by)
+              .single()
+
+            const displayName = profile?.display_name || 'Tu amorcito'
+            if (!currentPathRef.current.startsWith('/dashboard/para-ver')) {
+              showBrowserNotification(
+                `${displayName} agregó algo nuevo para ver: ${newRow.title}`,
+                profile?.avatar_url ?? null,
+              )
+              setToasts((prev) => [
+                ...prev,
+                {
+                  id: `para-ver-${newRow.id}`,
+                  message: `${displayName} agregó "${newRow.title}" para ver`,
+                  avatar_url: profile?.avatar_url ?? null,
+                },
+              ])
+              setParaVerBadge((prev) => prev + 1)
+            }
+          },
+        )
+        .on(
+          'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'letters' },
           async (payload: any) => {
             const newRow = payload.new as { id: string; recipient_id: string; created_by: string }
@@ -263,6 +320,12 @@ export function DashboardLayout() {
       await supabase.from('profiles').update({ last_seen_plans_at: now }).eq('id', userId)
     }
 
+    const markParaVerSeen = async () => {
+      const now = new Date().toISOString()
+      setParaVerBadge(0)
+      await supabase.from('profiles').update({ last_seen_para_ver_at: now }).eq('id', userId)
+    }
+
     const markLettersSeen = async () => {
       const now = new Date().toISOString()
       setLettersBadge(0)
@@ -273,6 +336,8 @@ export function DashboardLayout() {
       void markTodosSeen()
     } else if (location.pathname.startsWith('/dashboard/planes')) {
       void markPlansSeen()
+    } else if (location.pathname.startsWith('/dashboard/para-ver')) {
+      void markParaVerSeen()
     } else if (location.pathname.startsWith('/dashboard/cartitas')) {
       void markLettersSeen()
     }
@@ -285,6 +350,46 @@ export function DashboardLayout() {
     }, 5000)
     return () => clearTimeout(timer)
   }, [toasts])
+
+  useEffect(() => {
+    if (!isElectronRuntime()) return
+
+    const electronAPI = getElectronAPI()
+    if (!electronAPI) return
+
+    const unsubscribe = electronAPI.onUpdaterStatus((payload: UpdaterStatusPayload) => {
+      if (payload.type === 'update-available') {
+        setUpdateModal({
+          status: 'available',
+          version: payload.version,
+          message: payload.message ?? 'Se ha recibido una nueva actualización. ¿Quieres descargarla?',
+        })
+      } else if (payload.type === 'download-progress') {
+        setUpdateModal((current) => ({
+          status: 'downloading',
+          version: current?.version,
+          message: 'Descargando actualización...',
+          percent: payload.percent ?? current?.percent ?? 0,
+        }))
+      } else if (payload.type === 'update-downloaded') {
+        setUpdateModal((current) => ({
+          status: 'downloaded',
+          version: current?.version,
+          message: payload.message ?? 'Se actualizará la app',
+        }))
+      } else if (payload.type === 'error') {
+        setUpdateModal((current) => ({
+          status: 'error',
+          version: current?.version,
+          message: payload.message ?? 'No se pudo completar la actualización',
+        }))
+      }
+    })
+
+    void electronAPI.checkForUpdates()
+
+    return unsubscribe
+  }, [])
 
   return (
     <div className="flex min-h-screen bg-rose-50/30 dark:bg-slate-950">
@@ -359,13 +464,107 @@ export function DashboardLayout() {
               </div>
             </div>
           )}
+          {updateModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 px-4 backdrop-blur-md">
+              <div className="relative z-10 w-full max-w-md rounded-2xl bg-white/95 p-6 text-center shadow-2xl shadow-pink-500/20 ring-1 ring-slate-200/80 dark:bg-slate-900/95 dark:ring-slate-700/80">
+                <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {updateModal.message ?? 'Se ha recibido una nueva actualización. ¿Quieres descargarla?'}
+                </p>
+                {updateModal.version && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Versión disponible: {updateModal.version}
+                  </p>
+                )}
+                {updateModal.status === 'downloading' && (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                    Descargando: {updateModal.percent ?? 0}%
+                  </p>
+                )}
+                {updateModal.status === 'downloaded' && (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                    Se actualizará la app al reiniciar.
+                  </p>
+                )}
+                <div className="mt-5 flex justify-center gap-2">
+                  {updateModal.status === 'available' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setUpdateModal(null)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUpdateModal((current) =>
+                            current
+                              ? { ...current, status: 'downloading', message: 'Descargando actualización...' }
+                              : current,
+                          )
+                          void getElectronAPI()?.downloadUpdate()
+                        }}
+                        className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                      >
+                        Sí
+                      </button>
+                    </>
+                  )}
+                  {updateModal.status === 'downloading' && (
+                    <button
+                      type="button"
+                      disabled
+                      className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                    >
+                      Descargando...
+                    </button>
+                  )}
+                  {updateModal.status === 'downloaded' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setUpdateModal(null)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Más tarde
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          getElectronAPI()?.quitAndInstall()
+                        }}
+                        className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                      >
+                        Reiniciar y actualizar
+                      </button>
+                    </>
+                  )}
+                  {updateModal.status === 'error' && (
+                    <button
+                      type="button"
+                      onClick={() => setUpdateModal(null)}
+                      className="rounded-lg bg-gradient-to-r from-pink-400 to-rose-400 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-pink-500/30"
+                    >
+                      Cerrar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           <Outlet />
         </div>
       </main>
 
       {/* Navigation */}
       <div className="group fixed inset-y-0 right-0 z-50">
-        <RightSidebar todoBadge={todoBadge} planesBadge={planesBadge} lettersBadge={lettersBadge} />
+        <RightSidebar
+          todoBadge={todoBadge}
+          planesBadge={planesBadge}
+          paraVerBadge={paraVerBadge}
+          lettersBadge={lettersBadge}
+        />
       </div>
     </div>
   )
