@@ -180,8 +180,19 @@ ipcMain.handle('notifications:show', async (_event, payload) => {
 
 ipcMain.handle('updater:check', async () => {
   if (isDev) return { ok: false, reason: 'dev-mode' }
-  await autoUpdater.checkForUpdates()
-  return { ok: true }
+  try {
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
+  } catch (err) {
+    const message = String(err?.message ?? err ?? '')
+    // Private repo or no releases: GitHub returns 404 for releases.atom. Treat as "no update" so the UI doesn't show an error.
+    if (message.includes('404') || message.includes('releases.atom')) {
+      sendUpdaterStatus({ type: 'update-not-available' })
+      return { ok: true }
+    }
+    sendUpdaterStatus({ type: 'error', message: message || 'No se pudo comprobar actualizaciones' })
+    throw err
+  }
 })
 
 ipcMain.handle('updater:download', async () => {
