@@ -50,14 +50,49 @@ jobs:
       - name: Upload Windows installer to Release
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $exe = "release\Paginita Setup $version.exe"
-          $blockmap = "release\Paginita Setup $version.exe.blockmap"
-          if (Test-Path $exe) {
-            gh release upload ${{ github.ref_name }} $exe $blockmap --clobber
-          } else {
-            Write-Error "Installer not found: $exe"
+          $metadataPath = "release\latest.yml"
+          $assets = Get-ChildItem -Path release -File | Where-Object {
+            $_.Name -like "*$version*.exe" -or
+            $_.Name -like "*$version*.exe.blockmap"
+          }
+
+          if (-not (Test-Path $metadataPath)) {
+            Write-Error "Updater metadata not found: $metadataPath"
             Get-ChildItem release
             exit 1
           }
+
+          $installer = $assets | Where-Object { $_.Extension -eq ".exe" } | Select-Object -First 1
+          if (-not $installer) {
+            Write-Error "Installer for version $version not found in release output"
+            Get-ChildItem release
+            exit 1
+          }
+
+          $pathLine = Select-String -Path $metadataPath -Pattern '^path:\s*(.+)$'
+          if (-not $pathLine) {
+            Write-Error "Could not read installer path from $metadataPath"
+            Get-Content $metadataPath
+            exit 1
+          }
+
+          $publishedInstallerName = $pathLine.Matches[0].Groups[1].Value.Trim()
+          if (-not $publishedInstallerName) {
+            Write-Error "Could not read installer name from $metadataPath"
+            Get-Content $metadataPath
+            exit 1
+          }
+
+          $blockmap = $assets | Where-Object { $_.Name -like "*.exe.blockmap" } | Select-Object -First 1
+          $uploadArgs = @(
+            "$metadataPath#latest.yml",
+            "$($installer.FullName)#$publishedInstallerName"
+          )
+
+          if ($blockmap) {
+            $uploadArgs += "$($blockmap.FullName)#$publishedInstallerName.blockmap"
+          }
+
+          gh release upload ${{ github.ref_name }} $uploadArgs --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

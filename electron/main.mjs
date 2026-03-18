@@ -83,15 +83,32 @@ const showNativeNotification = async (message, avatarUrl) => {
   notification.show()
 }
 
-const setupUpdater = () => {
-  const getVersionPayload = (latestVersion) => {
-    const currentVersion = app.getVersion()
-    return {
-      currentVersion,
-      latestVersion: latestVersion || currentVersion,
-    }
+const getVersionPayload = (latestVersion) => {
+  const currentVersion = app.getVersion()
+  const payload = {
+    currentVersion,
+  }
+  if (latestVersion) {
+    payload.latestVersion = latestVersion
+  }
+  return payload
+}
+
+const getUpdaterErrorMessage = (error) => {
+  const message = String(error?.message ?? error ?? '')
+
+  if (message.includes('latest.yml')) {
+    return 'No se pudo comprobar actualizaciones. Falta latest.yml en la release de GitHub.'
   }
 
+  if (message.includes('404') || message.includes('releases.atom')) {
+    return 'No se pudo comprobar actualizaciones en GitHub.'
+  }
+
+  return message || 'No se pudo completar la actualizacion'
+}
+
+const setupUpdater = () => {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -142,21 +159,9 @@ const setupUpdater = () => {
   })
 
   autoUpdater.on('error', (error) => {
-    const message = String(error?.message ?? '')
-
-    // If there are no GitHub releases yet or GitHub returns 404,
-    // treat it as "no updates" instead of surfacing a loud error.
-    if (message.includes('404') || message.includes('releases.atom')) {
-      sendUpdaterStatus({
-        type: 'update-not-available',
-        ...getVersionPayload(),
-      })
-      return
-    }
-
     sendUpdaterStatus({
       type: 'error',
-      message: message || 'No se pudo completar la actualización',
+      message: getUpdaterErrorMessage(error),
       ...getVersionPayload(),
     })
   })
@@ -207,16 +212,9 @@ ipcMain.handle('updater:check', async () => {
     console.log('[updater] checkForUpdates() resolved')
     return { ok: true }
   } catch (err) {
-    const message = String(err?.message ?? err ?? '')
+    const message = getUpdaterErrorMessage(err)
     console.error('[updater] checkForUpdates() error:', message)
-    // Private repo or no releases: GitHub returns 404 for releases.atom. Treat as "no update" so the UI doesn't show an error.
-    if (message.includes('404') || message.includes('releases.atom')) {
-      console.warn('[updater] 404 / releases.atom – treating as no update')
-      sendUpdaterStatus({ type: 'update-not-available' })
-      return { ok: true }
-    }
-    sendUpdaterStatus({ type: 'error', message: message || 'No se pudo comprobar actualizaciones' })
-    throw err
+    return { ok: false, reason: message }
   }
 })
 

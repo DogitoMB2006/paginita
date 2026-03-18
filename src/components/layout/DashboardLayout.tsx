@@ -363,15 +363,15 @@ export function DashboardLayout() {
       if (payload.type === 'checking-for-update') {
         setUpdateModal({
           status: 'checking',
-          version: payload.latestVersion ?? payload.currentVersion ?? payload.version,
+          version: payload.currentVersion ?? payload.version,
           currentVersion: payload.currentVersion,
-          latestVersion: payload.latestVersion ?? payload.currentVersion,
+          latestVersion: payload.latestVersion,
           message: 'Buscando actualizaciones...',
         })
       } else if (payload.type === 'update-available') {
         setUpdateModal({
           status: 'available',
-          version: payload.version,
+          version: payload.latestVersion ?? payload.version,
           currentVersion: payload.currentVersion,
           latestVersion: payload.latestVersion ?? payload.version,
           message: payload.message ?? 'Se ha recibido una nueva actualización. ¿Quieres descargarla?',
@@ -381,7 +381,7 @@ export function DashboardLayout() {
           status: 'up-to-date',
           version: payload.currentVersion ?? payload.version,
           currentVersion: payload.currentVersion,
-          latestVersion: payload.latestVersion ?? payload.currentVersion ?? payload.version,
+          latestVersion: payload.latestVersion,
           message: 'Ya estás en la última versión disponible.',
         })
       } else if (payload.type === 'download-progress') {
@@ -404,7 +404,7 @@ export function DashboardLayout() {
       } else if (payload.type === 'error') {
         setUpdateModal((current) => ({
           status: 'error',
-          version: current?.version ?? payload.latestVersion ?? payload.currentVersion,
+          version: current?.version ?? payload.latestVersion ?? payload.currentVersion ?? payload.version,
           currentVersion: payload.currentVersion ?? current?.currentVersion,
           latestVersion: payload.latestVersion ?? current?.latestVersion,
           message: payload.message ?? 'No se pudo completar la actualización',
