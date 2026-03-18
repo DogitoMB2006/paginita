@@ -10,6 +10,7 @@ create table public.profiles (
   -- Notification helpers: when each user last saw sections
   last_seen_todos_at timestamp with time zone,
   last_seen_plans_at timestamp with time zone,
+  last_seen_para_ver_at timestamp with time zone,
   last_seen_letters_at timestamp with time zone
 );
 
@@ -45,6 +46,17 @@ create table public.letters (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- 5. Create Para Ver table (Peliculas / series para ver)
+create table public.para_ver_items (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  image_url text,
+  status text not null default 'no_visto' check (status in ('no_visto', 'viendo', 'visto')),
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Set up Row Level Security (RLS)
 -- Since this app is just for you and your girlfriend, we will allow all authenticated users 
 -- to read and write to these tables so you can share plans, letters, and todos.
@@ -53,6 +65,7 @@ alter table public.profiles enable row level security;
 alter table public.todos enable row level security;
 alter table public.plans enable row level security;
 alter table public.letters enable row level security;
+alter table public.para_ver_items enable row level security;
 
 -- Profiles Policies
 create policy "Authenticated users can view profiles" on public.profiles
@@ -99,6 +112,36 @@ create policy "Recipients can mark letters as read" on public.letters
   
 create policy "Users can delete their own sent letters" on public.letters
   for delete using (created_by = auth.uid());
+
+-- Para ver Policies (shared list)
+create policy "Authenticated users can view para ver items" on public.para_ver_items
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert para ver items" on public.para_ver_items
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update para ver items" on public.para_ver_items
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete para ver items" on public.para_ver_items
+  for delete using (auth.role() = 'authenticated');
+
+-- Storage bucket for "para ver" images (run in Supabase SQL editor)
+insert into storage.buckets (id, name, public)
+values ('para-ver', 'para-ver', true)
+on conflict (id) do nothing;
+
+create policy "Authenticated users can view para ver images" on storage.objects
+  for select using (bucket_id = 'para-ver');
+
+create policy "Authenticated users can upload para ver images" on storage.objects
+  for insert with check (bucket_id = 'para-ver' and auth.role() = 'authenticated');
+
+create policy "Authenticated users can update para ver images" on storage.objects
+  for update using (bucket_id = 'para-ver' and auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete para ver images" on storage.objects
+  for delete using (bucket_id = 'para-ver' and auth.role() = 'authenticated');
 
 -- Automatically create a profile when a new user signs up
 create function public.handle_new_user()

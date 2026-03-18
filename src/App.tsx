@@ -11,6 +11,7 @@ import { CosasQueHacer } from './pages/CosasQueHacer'
 import { Perfil } from './pages/Perfil'
 import { Planes } from './pages/Planes'
 import { Cartitas } from './pages/Cartitas'
+import { ParaVer } from './pages/ParaVer'
 
 function App() {
   const location = useLocation()
@@ -59,6 +60,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="todo" element={<CosasQueHacer />} />
             <Route path="planes" element={<Planes />} />
+            <Route path="para-ver" element={<ParaVer />} />
             <Route path="cartitas" element={<Cartitas />} />
             <Route path="perfil" element={<Perfil />} />
             <Route path="*" element={<Dashboard />} />

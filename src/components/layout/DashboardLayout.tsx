@@ -30,6 +30,7 @@ export function DashboardLayout() {
   const [userId, setUserId] = useState<string | null>(null)
   const [todoBadge, setTodoBadge] = useState(0)
   const [planesBadge, setPlanesBadge] = useState(0)
+  const [paraVerBadge, setParaVerBadge] = useState(0)
   const [lettersBadge, setLettersBadge] = useState(0)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [incomingLetterModal, setIncomingLetterModal] = useState<IncomingLetterModal | null>(null)
@@ -55,12 +56,13 @@ export function DashboardLayout() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('last_seen_todos_at, last_seen_plans_at, last_seen_letters_at')
+        .select('last_seen_todos_at, last_seen_plans_at, last_seen_para_ver_at, last_seen_letters_at')
         .eq('id', user.id)
         .single()
 
       const lastTodos = data?.last_seen_todos_at ?? null
       const lastPlans = data?.last_seen_plans_at ?? null
+      const lastParaVer = data?.last_seen_para_ver_at ?? null
       const lastLetters = data?.last_seen_letters_at ?? null
 
       if (lastTodos) {
@@ -91,6 +93,21 @@ export function DashboardLayout() {
           .select('id', { count: 'exact', head: true })
           .neq('created_by', currentUserId)
         if (isMounted) setPlanesBadge(plansCount ?? 0)
+      }
+
+      if (lastParaVer) {
+        const { count: paraVerCount } = await supabase
+          .from('para_ver_items')
+          .select('id', { count: 'exact', head: true })
+          .gt('created_at', lastParaVer)
+          .neq('created_by', currentUserId)
+        if (isMounted) setParaVerBadge(paraVerCount ?? 0)
+      } else {
+        const { count: paraVerCount } = await supabase
+          .from('para_ver_items')
+          .select('id', { count: 'exact', head: true })
+          .neq('created_by', currentUserId)
+        if (isMounted) setParaVerBadge(paraVerCount ?? 0)
       }
 
       let unreadLettersCount = 0
@@ -215,6 +232,37 @@ export function DashboardLayout() {
         )
         .on(
           'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'para_ver_items' },
+          async (payload: any) => {
+            const newRow = payload.new as { id: string; title: string; created_by: string | null }
+            if (!newRow.created_by || newRow.created_by === currentUserId) return
+
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('display_name, avatar_url')
+              .eq('id', newRow.created_by)
+              .single()
+
+            const displayName = profile?.display_name || 'Tu amorcito'
+            if (!currentPathRef.current.startsWith('/dashboard/para-ver')) {
+              showBrowserNotification(
+                `${displayName} agregó algo nuevo para ver: ${newRow.title}`,
+                profile?.avatar_url ?? null,
+              )
+              setToasts((prev) => [
+                ...prev,
+                {
+                  id: `para-ver-${newRow.id}`,
+                  message: `${displayName} agregó "${newRow.title}" para ver`,
+                  avatar_url: profile?.avatar_url ?? null,
+                },
+              ])
+              setParaVerBadge((prev) => prev + 1)
+            }
+          },
+        )
+        .on(
+          'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'letters' },
           async (payload: any) => {
             const newRow = payload.new as { id: string; recipient_id: string; created_by: string }
@@ -272,6 +320,12 @@ export function DashboardLayout() {
       await supabase.from('profiles').update({ last_seen_plans_at: now }).eq('id', userId)
     }
 
+    const markParaVerSeen = async () => {
+      const now = new Date().toISOString()
+      setParaVerBadge(0)
+      await supabase.from('profiles').update({ last_seen_para_ver_at: now }).eq('id', userId)
+    }
+
     const markLettersSeen = async () => {
       const now = new Date().toISOString()
       setLettersBadge(0)
@@ -282,6 +336,8 @@ export function DashboardLayout() {
       void markTodosSeen()
     } else if (location.pathname.startsWith('/dashboard/planes')) {
       void markPlansSeen()
+    } else if (location.pathname.startsWith('/dashboard/para-ver')) {
+      void markParaVerSeen()
     } else if (location.pathname.startsWith('/dashboard/cartitas')) {
       void markLettersSeen()
     }
@@ -503,7 +559,12 @@ export function DashboardLayout() {
 
       {/* Navigation */}
       <div className="group fixed inset-y-0 right-0 z-50">
-        <RightSidebar todoBadge={todoBadge} planesBadge={planesBadge} lettersBadge={lettersBadge} />
+        <RightSidebar
+          todoBadge={todoBadge}
+          planesBadge={planesBadge}
+          paraVerBadge={paraVerBadge}
+          lettersBadge={lettersBadge}
+        />
       </div>
     </div>
   )

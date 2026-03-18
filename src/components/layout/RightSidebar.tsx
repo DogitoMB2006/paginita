@@ -1,11 +1,12 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, ListTodo, Calendar, Heart, User, LogOut } from 'lucide-react'
+import { Home, ListTodo, Calendar, Heart, User, LogOut, Tv } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const navItems = [
   { icon: Home, label: 'Inicio', path: '/dashboard', key: 'home' },
   { icon: ListTodo, label: 'Cosas que hacer', path: '/dashboard/todo', key: 'todo' },
   { icon: Calendar, label: 'Planes', path: '/dashboard/planes', key: 'planes' },
+  { icon: Tv, label: 'Para ver', path: '/dashboard/para-ver', key: 'para-ver' },
   { icon: Heart, label: 'Cartitas', path: '/dashboard/cartitas', key: 'letters' },
   { icon: User, label: 'Perfil', path: '/dashboard/perfil', key: 'perfil' },
 ]
@@ -13,10 +14,16 @@ const navItems = [
 type RightSidebarProps = {
   todoBadge?: number
   planesBadge?: number
+  paraVerBadge?: number
   lettersBadge?: number
 }
 
-export function RightSidebar({ todoBadge = 0, planesBadge = 0, lettersBadge = 0 }: RightSidebarProps) {
+export function RightSidebar({
+  todoBadge = 0,
+  planesBadge = 0,
+  paraVerBadge = 0,
+  lettersBadge = 0,
+}: RightSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -34,6 +41,8 @@ export function RightSidebar({ todoBadge = 0, planesBadge = 0, lettersBadge = 0 
               ? todoBadge
               : item.key === 'planes'
               ? planesBadge
+              : item.key === 'para-ver'
+              ? paraVerBadge
               : item.key === 'letters'
               ? lettersBadge
               : 0
